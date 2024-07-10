@@ -5,4 +5,10 @@
 # # ccxt==1.42.76
 # websocket-client==1.2.1
 # no module named websockets
-websockets==9.1
+# websockets==9.1
+plotly==5.22.0
+flask-socketio==5.1.1
+websockets==12.0
+flask==2.0.1
+pandas==1.2.3
+requests

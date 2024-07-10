@@ -1,18 +1,20 @@
 import asyncio
+import requests
 import json
 import websockets
 from datetime import datetime
+from collections import deque
 
-# from prompt.CryptoSageBotTrader.app import send_new_coin
-import requests
+MAX_TOKENS = 100  # Maximum number of tokens to keep in memory
+MAX_TRADES = 1000  # Maximum number of trades to keep in memory
+MAX_NEW_COINS = 100  # Maximum number of new coins to keep in memory
 
-# modifying the class to include the new methods
 class AIStrategy:
     def __init__(self):
         self.ws_url = "wss://frontend-api.pump.fun/socket.io/?EIO=4&transport=websocket"
         self.tokens_data = {}
-        self.trades = []
-        self.new_coins = []
+        self.trades = deque(maxlen=MAX_TRADES)
+        self.new_coins = deque(maxlen=MAX_NEW_COINS)
         self.websocket_task = None
 
     async def connect_websocket(self):
@@ -32,8 +34,6 @@ class AIStrategy:
                                     self.process_new_coin(event_data)
                                 elif event_type == "tradeCreated":
                                     self.process_trade(event_data)
-                                else:
-                                    print(f"Received unknown event: {event_type}")
                         except websockets.exceptions.ConnectionClosed:
                             print("WebSocket connection closed. Reconnecting...")
                             break
@@ -44,8 +44,11 @@ class AIStrategy:
     def process_new_coin(self, coin_data):
         self.new_coins.append(coin_data)
         self.tokens_data[coin_data['mint']] = coin_data
-        print(f"New coin created: {coin_data['name']} ({coin_data['symbol']}), Mint: https://pump.fun/{coin_data['mint']}")
+        if len(self.tokens_data) > MAX_TOKENS:
+            oldest_mint = min(self.tokens_data, key=lambda x: self.tokens_data[x]['created_timestamp'])
+            del self.tokens_data[oldest_mint]
         requests.post(f"http://0.0.0.0:5000/new_coin", json=coin_data)
+        print(f"New coin created: {coin_data['name']} ({coin_data['symbol']}), Mint: https://pump.fun/{coin_data['mint']}")
 
     def process_trade(self, trade_data):
         self.trades.append(trade_data)
@@ -55,8 +58,8 @@ class AIStrategy:
                 'market_cap': trade_data['market_cap'],
                 'usd_market_cap': trade_data['usd_market_cap']
             })
-        # print(f"Trade: {'Buy' if trade_data['is_buy'] else 'Sell'} {trade_data['token_amount']} {trade_data['symbol']} for {trade_data['sol_amount'] / 1e9:.6f} SOL, Address {trade_data['mint']}")
         requests.post(f"http://0.0.0.0:5000/trade", json=trade_data)
+        # print(f"Trade executed: {'Buy' if trade_data['is_buy'] else 'Sell'} {trade_data['token_amount']} {trade_data['symbol']} for {trade_data['sol_amount'] / 1e9:.6f} SOL")
 
     async def select_token(self):
         if not self.tokens_data:
@@ -102,7 +105,7 @@ class AIStrategy:
             insights += f"Newest coin: {newest_coin['name']} ({newest_coin['symbol']}) - Created at {datetime.fromtimestamp(newest_coin['created_timestamp']/1000)}\n"
 
         if self.trades:
-            latest_trade = max(self.trades, key=lambda x: x['timestamp'])
+            latest_trade = self.trades[-1]
             insights += f"Latest trade: {'Buy' if latest_trade['is_buy'] else 'Sell'} {latest_trade['token_amount']} {latest_trade['symbol']} for {latest_trade['sol_amount'] / 1e9:.6f} SOL\n"
 
         return insights

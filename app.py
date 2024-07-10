@@ -417,6 +417,8 @@ local_zone = pytz.timezone('America/New_York')
 @app.route('/api/stats')
 def api_stats():
     df = pd.read_csv('market_data1.csv')
+    if df.empty:
+        return jsonify({})
     # df['timestamp'] = pd.to_datetime(df['timestamp'])
     # Convert 'created_timestamp' from Unix timestamp (milliseconds) to datetime
     df['created_timestamp'] = pd.to_datetime(df['created_timestamp'], unit='ms')
@@ -470,7 +472,7 @@ def api_stats():
         'layout': go.Layout(title='Trade Volume (Last Hour)', xaxis_title='Time', yaxis_title='Number of Trades')
     }
 
-    print(total_market_cap_chart, top_coins_chart, trade_volume_chart)
+    print("total_market_cap_chart, top_coins_chart, trade_volume_chart")
 
     # return jsonify({
     #     'total_market_cap_chart': total_market_cap_chart,
@@ -514,4 +516,4 @@ def send_trade(trade_data):
     socketio.emit('trade', trade_data)
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
+    socketio.run(app, host="0.0.0.0", port=5001, debug=True, allow_unsafe_werkzeug=True)
